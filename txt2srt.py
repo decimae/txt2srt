@@ -100,6 +100,15 @@ def timestring(time, nexttime):
 
 def findchar(string,char):
     return [i for i, character in enumerate(string) if char == character]
+    
+def removeedgewhitespace(string):
+    if(string[0] == " " or string[0] == "\n"):
+        return removeedgewhitespace(string[1:])
+    elif(string[-1] == " " or string[-1] =="\n"):
+        return removeedgewhitespace(string[:-1])
+    else:
+        return string
+
 
 def run():
     exportf = fd.asksaveasfilename(defaultextension = ".srt")
@@ -114,7 +123,7 @@ def run():
         file.seek(0)
         while(True):
             pos = subsize
-            string = file.read(readlength + 1)
+            string = file.read(readlength + 1) # maybe read differently, getting the robot characters widths? 
             
             if(len(string) < readlength + 1):
                 break
@@ -160,7 +169,54 @@ def run():
             
         
         
+        
+    elif(chopVar.get() == "valbreak"):
+        filechars = file.read() + "\n"
+        numchar = len(filechars) - 1
+        basewidth = float(deltacVar.get())
+        bestlength = float(idcVar.get())
+        
+        scores = [[0,0] for i in range(numchar + 3)]
+        
+        
+        for i in reversed(range(numchar-2)):
+            listmin = i + 1
+            listmax = min(int(round(i + bestlength + 3*basewidth)),numchar - 1)
+            ideal = i + bestlength # could be float, that's okay
+
+            
+            
+
+            
+            for j in range(listmin, min(listmax + 1,numchar - 1)):
+                if(filechars[j] == filechars[j + 1] and filechars[j] == "\n"):
+                    listmax = j
+                    break
                 
+            scoreopts = [[k,100] for k in range(listmin,listmax + 1)]
+            for k in range(listmin, listmax + 1):
+                if(filechars[k] == "\n" or filechars[k] == "." or filechars[k] == "!"):
+                    scoreopts[k-listmin] = [k,0.001 + ((k - ideal)/basewidth)**2 + scores[k + 1][1]] # very slightly prefer less chops
+                elif(filechars[k] == "," or filechars[k] == ";" or filechars[k] == ":"):
+                    scoreopts[k-listmin] = [k,1.001 + ((k - ideal)/basewidth)**2 + scores[k + 1][1]]
+                elif(filechars[k] == " "):
+                    scoreopts[k-listmin] = [k,2.001 + ((k - ideal)/basewidth)**2 + scores[k + 1][1]]
+            
+            scores[i] = min(scoreopts, key = lambda pair : pair[1])
+
+        l = 0
+        i = 0
+        while(scores[i][0] != 0): # why must python not do real for loops
+            outfile.write(str(l) + "\n")
+            time = l * timedelta
+            nexttime = (l + 1) * timedelta
+            outfile.write(timestring(time, nexttime))
+            
+            outfile.write(removeedgewhitespace(filechars[i:scores[i][0] + 1]) + "\n\n")
+            i = scores[i][0] + 1
+            l += 1
+                
+            
     else:
         for x in file:
             if x == "\n":
@@ -169,7 +225,7 @@ def run():
             time = i * timedelta
             nexttime = (i + 1) * timedelta
             outfile.write(timestring(time, nexttime))
-            outfile.write(x + "\n")
+            outfile.write(x + "\n\n")
             i += 1
     exit()
     
@@ -185,51 +241,69 @@ importfVar = tk.StringVar()
 tk.Entry(window, width = 60, textvariable = importfVar, state = "disabled").grid(row = 0, column = 1,columnspan = 5)
 tk.Button(window, text = "Select", command = openfile).grid(row = 0, column = 6, columnspan = 3)
 
-chopVar = tk.StringVar()
-chopVar.set("linebreak")
-tk.Radiobutton(window, text = "Use linebreaks to chop", variable = chopVar, value = "linebreak").grid(row = 1)
-
-tk.Label(window, text = "Number of lines:").grid(row = 2, column = 0, columnspan = 2)
-numlinesVar = tk.IntVar()
-tk.Entry(window, width = 5, textvariable = numlinesVar, state = "disabled", justify = "right").grid(row = 2, column = 2)
-
-tk.Label(window, text = "Time per line (seconds):").grid(row = 2, column = 3)
+tk.Label(window, text = "Time per line (seconds):").grid(row = 1, column = 0)
 timedeltaVar = tk.StringVar()
 timedeltaVar.set("5")
 timedeltaVar.trace("w",updatefromdelta)
-tk.Entry(window, width = 5, validate = "focusout", textvariable = timedeltaVar, justify = "right").grid(row = 2, column = 4)
+tk.Entry(window, width = 5, validate = "focusout", textvariable = timedeltaVar, justify = "right").grid(row = 1, column = 1)
 
-tk.Label(window, text = "Total time (min:seconds)").grid(row = 2, column = 5)
+chopVar = tk.StringVar()
+chopVar.set("linebreak")
+tk.Radiobutton(window, text = "Use linebreaks to chop", variable = chopVar, value = "linebreak").grid(row = 2)
+
+tk.Label(window, text = "Number of lines:").grid(row = 3, column = 0, columnspan = 2)
+numlinesVar = tk.IntVar()
+tk.Entry(window, width = 5, textvariable = numlinesVar, state = "disabled", justify = "right").grid(row = 3, column = 2)
+
+tk.Label(window, text = "Time per line (seconds):").grid(row = 3, column = 3)
+timedeltaVar = tk.StringVar()
+timedeltaVar.set("5")
+timedeltaVar.trace("w",updatefromdelta)
+tk.Entry(window, width = 5, validate = "focusout", textvariable = timedeltaVar, justify = "right").grid(row = 3, column = 4)
+
+tk.Label(window, text = "Total time (min:seconds)").grid(row = 3, column = 5)
 totalmVar = tk.StringVar()
 totalmVar.set("0")
 totalmVar.trace("w",updatefromtotal)
-tk.Entry(window, width = 5, validate = "focusout", textvariable = totalmVar, justify = "right").grid(row = 2, column = 6)
+tk.Entry(window, width = 5, validate = "focusout", textvariable = totalmVar, justify = "right").grid(row = 3, column = 6)
 
-tk.Label(window, text = ":").grid(row = 2, column = 7)
+tk.Label(window, text = ":").grid(row = 3, column = 7)
 totalsVar = tk.StringVar()
 totalsVar.set("00")
 totalsVar.trace("w",updatefromtotal)
-tk.Entry(window, width = 2, validate = "focusout", textvariable = totalsVar, justify = "right").grid(row = 2, column = 8)
+tk.Entry(window, width = 2, validate = "focusout", textvariable = totalsVar, justify = "right").grid(row = 3, column = 8)
 
-tk.Radiobutton(window, text = "Chop based on number of characters (force new caption with double newline)", variable = chopVar, value = "charbreak").grid(row = 3, columnspan = 5)
+tk.Radiobutton(window, text = "Chop based on number of characters (force new caption with double newline)", variable = chopVar, value = "charbreak").grid(row = 4, columnspan = 4)
 
-tk.Label(window, text = "Min characters:").grid(row = 4, column  = 0, columnspan = 2)
+tk.Label(window, text = "Min characters:").grid(row = 5, column  = 0, columnspan = 2)
 mincVar = tk.StringVar()
 mincVar.set("65")
-tk.Entry(window, width = 3, textvariable = mincVar, justify = "right").grid(row = 4, column = 2)
+tk.Entry(window, width = 3, textvariable = mincVar, justify = "right").grid(row = 5, column = 2)
 
-tk.Label(window, text = "Max:").grid(row = 4, column = 3)
+tk.Label(window, text = "Max:").grid(row = 5, column = 3)
 maxcVar = tk.StringVar()
 maxcVar.set("90")
-tk.Entry(window,width = 3, textvariable = maxcVar, justify = "right").grid(row = 4, column = 4)
+tk.Entry(window,width = 3, textvariable = maxcVar, justify = "right").grid(row = 5, column = 4)
 
-tk.Label(window, text = "Ideal characters:").grid(row = 4, column = 5)
+tk.Label(window, text = "Ideal characters:").grid(row = 5, column = 5)
 idcVar = tk.StringVar()
 idcVar.set("80")
-tk.Entry(window, width = 3, textvariable = idcVar, justify = "right").grid(row = 4, column = 6)
+tk.Entry(window, width = 3, textvariable = idcVar, justify = "right").grid(row = 5, column = 6)
+
+tk.Radiobutton(window, text = "Chop based on score based on number of characters (force new caption with double newline)", variable = chopVar, value = "valbreak").grid(row = 6, columnspan = 5)
+
+tk.Label(window, text = "Ideal characters:").grid(row = 7, column = 0)
+idcVar = tk.StringVar()
+idcVar.set("80")
+tk.Entry(window, width = 5, textvariable = idcVar, justify = "right").grid(row = 7, column = 1)
+
+tk.Label(window, text = "Character number deviation:").grid(row = 7, column = 2)
+deltacVar = tk.StringVar()
+deltacVar.set("10")
+tk.Entry(window, width = 5, textvariable = deltacVar, justify = "right").grid(row = 7, column = 3)
 
 
-tk.Button(window, text = "Convert", command = run).grid(row = 5, column = 6, columnspan = 3)
+tk.Button(window, text = "Convert", command = run).grid(row = 8, column = 6, columnspan = 3)
 window.mainloop()
 
 
